@@ -1,17 +1,68 @@
 const StellarSDK = require("stellar-sdk");
 const { createAccount, getBalances } = require("./module/account");
 const { server, checkBalancesInServer } = require("./module/server");
+const { user1, user2 } = require("./keys");
+const fs = require("fs");
 
 (async () => {
   // creates a first account and checks its balance
   // this will be used as the origin / source account
-  const firstAccount = await createAccount();
-  await getBalances(firstAccount.publicKey());
+
+  // const firstAccount = await createAccount(); // => the first time
+  const firstAccount = StellarSDK.Keypair.fromSecret(user1.private);
+  // await getBalances(firstAccount.publicKey());
 
   // creates a second account and checks its balance
   // this will be used as the destination account
-  const secondAccount = await createAccount();
-  await getBalances(secondAccount.publicKey());
+
+  // const secondAccount = await createAccount(); // => the first time
+  const secondAccount = StellarSDK.Keypair.fromSecret(user2.private);
+  // await getBalances(secondAccount.publicKey());
+
+  // CODIGO PARA HACER UNA TRANSACCION
+
+  // API Call to query payments from determinated account
+  const payments = server.payments().forAccount(secondAccount.publicKey());
+
+  // If some payments have already been handled, start the results from the
+  // last seen payment. If not, it shows the full list.
+  // getLastPagingToken reads the "database"
+  const lastPagingToken = getLastPagingToken();
+  if (lastPagingToken) {
+    payments.cursor(lastPagingToken);
+  }
+
+  // `stream` will send each recorded payment, one by one, then keep the
+  // connection open and continue to send you new payments as they occur.
+  // ---------------------------------------------------------------------
+  // The results of the query are streamed.
+  // This is the easiest way to watch for payments or other transactions.
+  // Each existing payment is sent through the stream, one by one.
+  // Once all existing payments have been sent,
+  // the stream stays open and new payments are sent as they are made.
+  payments.stream({
+    onmessage: (payment) => {
+      // savePagingToken saves the last paging_token in the "database"
+      savePagingToken(payment.paging_token);
+
+      if (payment.to !== secondAccount.publicKey()) {
+        return;
+      }
+
+      let asset;
+
+      if (payment.asset_type === "native") {
+        asset = "lumens";
+      } else {
+        asset = payment.asset_code + ":" + payment.asset_issuer;
+      }
+
+      console.log(`${payment.amount} ${asset} from ${payment.from}`);
+    },
+    onerror: (err) => {
+      console.log(err);
+    },
+  });
 
   const destinationID = secondAccount.publicKey();
 
@@ -81,3 +132,11 @@ const { server, checkBalancesInServer } = require("./module/server");
       console.error("Transaction failed: ", err);
     });
 })();
+
+function savePagingToken(token) {
+  fs.writeFileSync("./database.json", JSON.stringify(token));
+}
+
+function getLastPagingToken() {
+  return JSON.parse(fs.readFileSync("./database.json", "utf-8"));
+}
