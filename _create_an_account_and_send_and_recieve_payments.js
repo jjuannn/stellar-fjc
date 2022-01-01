@@ -10,14 +10,14 @@ const fs = require("fs");
 
   // const firstAccount = await createAccount(); // => the first time
   const firstAccount = StellarSDK.Keypair.fromSecret(user1.private);
-  // await getBalances(firstAccount.publicKey());
+  await getBalances(firstAccount.publicKey());
 
   // creates a second account and checks its balance
   // this will be used as the destination account
 
   // const secondAccount = await createAccount(); // => the first time
   const secondAccount = StellarSDK.Keypair.fromSecret(user2.private);
-  // await getBalances(secondAccount.publicKey());
+  await getBalances(secondAccount.publicKey());
 
   // CODIGO PARA HACER UNA TRANSACCION
 
